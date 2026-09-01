@@ -57,8 +57,8 @@
     <div class="empty" id="empty">Chargement…</div>
   </div>
 
-  <p class="note">La page se rafraîchit toute seule chaque minute ; le scan tourne toutes les
-     5 minutes. « Écart » est la distance entre les deux empreintes : 0 = image identique au
+  <p class="note">La page se rafraîchit toutes les 10 secondes et le veilleur écrit en direct :
+     un token détecté apparaît en quelques secondes. « Écart » est la distance entre les deux empreintes : 0 = image identique au
      pixel près après ré-encodage. Une image recyclée sous un <i>nom différent</i> n’est pas
      détectable : aucune recherche inverse par image n’existe publiquement.</p>
 </div>
@@ -81,9 +81,19 @@ function tok(mint, sym, img){
        + (img ? `<img class="tk" src="${img}" loading="lazy" alt="">` : '')
        + `<span class="sym">${(sym||'?').slice(0,18)}</span></a>`;
 }
+const TEMPS_REEL = 'https://raw.githubusercontent.com/team675/pump-image-reuse/data/data.json';
+async function source(){
+  // la branche data est ecrite en direct par le veilleur ; le fichier local est
+  // le filet de securite alimente par le scan de 5 min
+  try{
+    const r = await fetch(TEMPS_REEL + '?t=' + Date.now(), {cache:'no-store'});
+    if (r.ok) return await r.json();
+  }catch(e){}
+  return await (await fetch('data.json?t=' + Date.now(), {cache:'no-store'})).json();
+}
 async function charger(){
   try{
-    const d = await (await fetch('data.json?t=' + Date.now())).json();
+    const d = await source();
     document.getElementById('maj').textContent  = ago(d.maj);
     document.getElementById('scan').textContent = fr.format(d.scannes ?? 0);
     document.getElementById('tr').textContent   = fr.format(d.trouves ?? 0);
@@ -104,5 +114,5 @@ async function charger(){
     document.getElementById('empty').textContent = 'Données indisponibles (scan pas encore passé).';
   }
 }
-charger(); setInterval(charger, 60000);
+charger(); setInterval(charger, 10000);
 </script>

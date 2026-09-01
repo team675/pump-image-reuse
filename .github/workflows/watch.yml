@@ -1,0 +1,28 @@
+name: veille temps reel
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # un job prend le relais toutes les 30 min
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: veille
+  cancel-in-progress: true   # le nouveau job remplace l'ancien : couverture continue
+jobs:
+  veille:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet requests pillow websockets
+      - name: veiller
+        env:
+          DUREE: "2100"          # 35 min : recouvre le cron de 30 min
+          GIT_AUTHOR_NAME: veille
+          GIT_AUTHOR_EMAIL: veille@users.noreply.github.com
+          GIT_COMMITTER_NAME: veille
+          GIT_COMMITTER_EMAIL: veille@users.noreply.github.com
+        run: python watch.py
