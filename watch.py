@@ -54,8 +54,13 @@ def publier(force=False):
     chemin = os.path.join(HERE, FICHIER)
     json.dump(charge, open(chemin, "w"))
     sh("git", "add", "-f", FICHIER)
-    # un seul commit sur la branche, reecrit : l'historique reste minuscule
-    sh("git", "commit", "-q", "--allow-empty", "-m", "journal temps reel")
+    # un SEUL commit ajoute, reecrit a chaque publication : sans --amend on
+    # empilerait ~140 commits par job, soit des milliers par jour.
+    args = ["git", "commit", "-q", "--allow-empty", "-m", "journal temps reel"]
+    if etat.get("commit_fait"):
+        args.insert(2, "--amend")
+    sh(*args)
+    etat["commit_fait"] = True
     r = sh("git", "push", "--force", "origin", f"HEAD:{BRANCHE}")
     if r.returncode == 0:
         etat["dernier_push"] = time.time()
