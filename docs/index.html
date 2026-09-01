@@ -1,0 +1,108 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Images réutilisées — pump.fun</title>
+<style>
+  :root{--bg:#fff;--fg:#15171a;--dim:#6b7280;--line:#e5e7eb;--card:#f9fafb;--acc:#b91c1c}
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0d1117;--fg:#e6edf3;--dim:#8b949e;--line:#252c34;--card:#161b22;--acc:#f87171}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 18px 60px}
+  h1{font-size:23px;margin:0 0 6px;letter-spacing:-.01em}
+  p.sub{color:var(--dim);margin:0 0 20px}
+  .bar{display:flex;gap:26px;flex-wrap:wrap;padding:14px 16px;background:var(--card);
+       border:1px solid var(--line);border-radius:10px;margin-bottom:20px}
+  .bar div{min-width:110px}
+  .bar b{display:block;font-size:21px;font-variant-numeric:tabular-nums}
+  .bar span{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+  .scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+  table{border-collapse:collapse;width:100%;min-width:820px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{background:var(--card);font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+     color:var(--dim);font-weight:600}
+  tr:last-child td{border-bottom:0}
+  a{color:inherit;text-decoration:none;border-bottom:1px solid var(--line)}
+  a:hover{border-bottom-color:currentColor}
+  img.tk{width:26px;height:26px;border-radius:5px;vertical-align:middle;margin-right:8px;
+         object-fit:cover;background:var(--line)}
+  .sym{font-weight:600}
+  .old{color:var(--acc);font-weight:600}
+  .note{color:var(--dim);font-size:13px;margin-top:18px}
+  .empty{padding:34px 16px;text-align:center;color:var(--dim)}
+</style>
+<div class="wrap">
+  <h1>Images réutilisées sur pump.fun</h1>
+  <p class="sub">Chaque ligne : un token qui vient de naître avec l’image d’un token
+     <b>déjà existant</b>. Comparaison par empreinte perceptuelle, donc un simple
+     ré-encodage ou un redimensionnement ne trompe pas la détection.</p>
+
+  <div class="bar">
+    <div><span>Dernier scan</span><b id="maj">—</b></div>
+    <div><span>Tokens examinés</span><b id="scan">—</b></div>
+    <div><span>Copies au dernier tour</span><b id="tr">—</b></div>
+    <div><span>Journal</span><b id="tot">—</b></div>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Token sorti</th><th>Quand</th><th>Copie l’image de</th>
+        <th>Source lancée</th><th>Écart</th><th>Homonymes 24 h</th><th>Lanceur</th>
+      </tr></thead>
+      <tbody id="body"></tbody>
+    </table>
+    <div class="empty" id="empty">Chargement…</div>
+  </div>
+
+  <p class="note">La page se rafraîchit toute seule chaque minute ; le scan tourne toutes les
+     5 minutes. « Écart » est la distance entre les deux empreintes : 0 = image identique au
+     pixel près après ré-encodage. Une image recyclée sous un <i>nom différent</i> n’est pas
+     détectable : aucune recherche inverse par image n’existe publiquement.</p>
+</div>
+<script>
+const fr = new Intl.NumberFormat('fr-FR');
+function ago(ts){
+  const s = Date.now()/1000 - ts;
+  if (s < 90) return 'il y a ' + Math.round(s) + ' s';
+  if (s < 5400) return 'il y a ' + Math.round(s/60) + ' min';
+  if (s < 172800) return 'il y a ' + Math.round(s/3600) + ' h';
+  return 'il y a ' + Math.round(s/86400) + ' j';
+}
+function jours(j){
+  if (j >= 1) return fr.format(Math.round(j)) + ' j avant';
+  const h = Math.round(j*24);
+  return (h >= 1 ? h + ' h' : Math.round(j*1440) + ' min') + ' avant';
+}
+function tok(mint, sym, img){
+  return `<a href="https://pump.fun/coin/${mint}" target="_blank" rel="noopener">`
+       + (img ? `<img class="tk" src="${img}" loading="lazy" alt="">` : '')
+       + `<span class="sym">${(sym||'?').slice(0,18)}</span></a>`;
+}
+async function charger(){
+  try{
+    const d = await (await fetch('data.json?t=' + Date.now())).json();
+    document.getElementById('maj').textContent  = ago(d.maj);
+    document.getElementById('scan').textContent = fr.format(d.scannes ?? 0);
+    document.getElementById('tr').textContent   = fr.format(d.trouves ?? 0);
+    const e = d.entrees || [];
+    document.getElementById('tot').textContent  = fr.format(e.length);
+    document.getElementById('body').innerHTML = e.map(r => `<tr>
+      <td>${tok(r.mint, r.symbol, r.image)}</td>
+      <td>${ago(r.cree)}</td>
+      <td>${tok(r.src_mint, r.src_symbol, r.src_image)}</td>
+      <td class="${r.jours >= 30 ? 'old' : ''}">${jours(r.jours)}</td>
+      <td>${r.dist}</td>
+      <td>${fr.format(r.n_homonymes)}</td>
+      <td>${r.lanceur || '—'}</td></tr>`).join('');
+    document.getElementById('empty').style.display = e.length ? 'none' : 'block';
+    if (!e.length) document.getElementById('empty').textContent =
+      'Aucune image réutilisée détectée pour le moment.';
+  }catch(err){
+    document.getElementById('empty').textContent = 'Données indisponibles (scan pas encore passé).';
+  }
+}
+charger(); setInterval(charger, 60000);
+</script>
