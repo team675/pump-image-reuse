@@ -18,6 +18,7 @@ import pump_reuse_watch as P
 
 DUREE = float(os.environ.get("DUREE", 2100))     # 35 min puis le workflow reprend
 PUSH_MIN = float(os.environ.get("PUSH_MIN", 15))  # au plus un push toutes les 15 s
+BATTEMENT = 60.0   # ... et au moins un toutes les 60 s, sinon la page semble morte
 BRANCHE = "data"
 FICHIER = "data.json"
 GARDE = 300
@@ -45,10 +46,14 @@ def charger_journal():
 
 
 def publier(force=False):
-    if not etat["sale"]:
-        return
-    if not force and time.time() - etat["dernier_push"] < PUSH_MIN:
-        return
+    """Publie si du neuf, ou de toute facon toutes les BATTEMENT secondes : sans
+    ce battement de coeur la page affiche un horodatage fige et parait tombee."""
+    depuis = time.time() - etat["dernier_push"]
+    if not force:
+        if etat["sale"] and depuis < PUSH_MIN:
+            return
+        if not etat["sale"] and depuis < BATTEMENT:
+            return
     charge = {"maj": time.time(), "mode": "temps_reel", "scannes": etat["vus"],
               "trouves": etat["trouves"], "entrees": etat["entrees"][:GARDE]}
     chemin = os.path.join(HERE, FICHIER)
@@ -105,6 +110,13 @@ async def principal():
     sem = asyncio.Semaphore(12)
     fin = time.time() + DUREE
     print(f"veille temps reel pour {DUREE / 60:.0f} min", flush=True)
+
+    async def publieur():
+        # git dans un thread : sinon chaque push (2-5 s) gelait la lecture du flux
+        while time.time() < fin:
+            await asyncio.sleep(8)
+            await asyncio.to_thread(publier)
+    asyncio.get_running_loop().create_task(publieur())
     async for ws in websockets.connect(P.WSURL, ping_interval=20, open_timeout=30):
         try:
             await ws.send(json.dumps({"method": "subscribeNewToken"}))
@@ -112,16 +124,13 @@ async def principal():
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=20)
                 except asyncio.TimeoutError:
-                    publier()
                     continue
                 m = json.loads(raw)
                 if m.get("txType") == "create" and m.get("mint"):
                     asyncio.create_task(traiter(m, sem))
-                publier()
             break
         except Exception as e:
             print(f"  ~ reconnexion ({e})", flush=True)
-            publier()
             if time.time() >= fin:
                 break
     await asyncio.sleep(3)      # laisser finir les taches en vol
